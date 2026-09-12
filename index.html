@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Stickman Studio</title>
+<style>
+body{margin:0;background:#111;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+main{padding:12px}.wrap{aspect-ratio:16/9;background:#fff;border-radius:14px;overflow:hidden}
+canvas{width:100%;height:100%;display:block}
+.controls{display:flex;gap:10px;margin-top:12px}
+button{font-size:18px;padding:12px 18px;border:0;border-radius:12px}
+</style>
+</head>
+<body>
+<main>
+<h2>Stickman Studio — Prototype 01</h2>
+<div class="wrap"><canvas id="c" width="1280" height="720"></canvas></div>
+<div class="controls"><button id="play">▶︎ Play</button><button id="reset">↺ Reset</button></div>
+</main>
+<script>
+if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
+const c=document.getElementById('c'),x=c.getContext('2d'),play=document.getElementById('play'),reset=document.getElementById('reset');
+let t=0,run=false,last=performance.now();
+function man(px,py,wave=false,face=false){
+ x.save();x.translate(px,py);x.strokeStyle='#111';x.lineWidth=10;x.lineCap='round';
+ x.beginPath();x.arc(0,-150,34,0,Math.PI*2);x.stroke();
+ x.beginPath();x.moveTo(0,-115);x.lineTo(0,-20);x.stroke();
+ x.beginPath();x.moveTo(0,-90);x.lineTo(-48,-60);x.stroke();
+ x.beginPath();x.moveTo(0,-90);x.lineTo(48,wave?-145:-60);x.stroke();
+ x.beginPath();x.moveTo(0,-20);x.lineTo(-32,70);x.stroke();
+ x.beginPath();x.moveTo(0,-20);x.lineTo(32,70);x.stroke();
+ if(face){x.lineWidth=4;x.beginPath();x.arc(0,-145,14,.15*Math.PI,.85*Math.PI);x.stroke()}
+ x.restore();
+}
+function draw(){
+ x.fillStyle='#f7f7f5';x.fillRect(0,0,c.width,c.height);
+ x.strokeStyle='#ccc';x.lineWidth=3;x.beginPath();x.moveTo(0,560);x.lineTo(1280,560);x.stroke();
+ let ax=-100;if(t>=1&&t<6)ax=-70+(680*((t-1)/5));else if(t>=6)ax=610;
+ man(ax,490,t>=7,t>=7);man(820,490,t>=7.7,t>=7.7);
+ if(t>=7.2&&t<9.5){x.fillStyle='#111';x.font='bold 30px sans-serif';x.fillText('Ciao!',640,260)}
+}
+function loop(now){let dt=(now-last)/1000;last=now;if(run){t+=dt;if(t>=10){t=10;run=false;play.textContent='▶︎ Replay'}}draw();requestAnimationFrame(loop)}
+play.onclick=()=>{if(t>=10)t=0;run=!run;play.textContent=run?'⏸ Pausa':'▶︎ Play'};
+reset.onclick=()=>{t=0;run=false;play.textContent='▶︎ Play';draw()};
+draw();requestAnimationFrame(loop);
+</script>
+</body></html>
