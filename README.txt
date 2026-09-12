@@ -1,10 +1,7 @@
-STICKMAN STUDIO V4 — TEST ESPORTAZIONE iPAD
+STICKMAN STUDIO V4.1
+Correzione iPad/Safari:
+- la registrazione NON apre più automaticamente il foglio Condividi;
+- a fine registrazione appare “Video pronto” con formato, dimensione e durata;
+- premi manualmente “Salva / Condividi”: il tap fornisce la user activation richiesta da Safari/iPadOS.
 
-1. Sostituisci index.html, manifest.webmanifest e sw.js nel repository GitHub Pages.
-2. Fai commit.
-3. Apri una volta il sito con ?v=4.
-4. Premi “⏺ Registra”.
-5. La storia riparte da scena 1 e viene registrata a 30 fps dal Canvas.
-6. Alla fine, se Safari supporta le API richieste, compare il foglio Condividi/Salva file.
-7. Il formato scelto dipende dalle API effettivamente esposte da Safari/iPadOS:
-   l’app prova prima MP4/H.264, poi WebM.
+Aggiorna index.html, manifest.webmanifest e sw.js su GitHub Pages e apri ?v=4.1.

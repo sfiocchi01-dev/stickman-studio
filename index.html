@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111111"><link rel="manifest" href="manifest.webmanifest">
-<title>Stickman Studio v4</title>
+<title>Stickman Studio v4.1</title>
 <style>
 :root{color-scheme:dark;--bg:#111;--p:#1c1c1e;--line:#3a3a3c;--muted:#aaa;--blue:#0a84ff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -19,17 +19,17 @@ label{display:block;color:var(--muted);font-size:12px;margin:5px 0}.help{color:v
 </style>
 </head>
 <body>
-<header><h1>Stickman Studio v4</h1><p>Storie multi-scena • registrazione Canvas • iPad-first</p></header>
+<header><h1>Stickman Studio v4.1</h1><p>Storie multi-scena • registrazione Canvas • iPad-first</p></header>
 <main>
 <section>
  <div class="stage"><canvas id="c" width="1280" height="720"></canvas></div>
  <div class="panel" style="margin-top:9px">
   <div class="controls">
-   <button class="primary" id="play">▶︎ Storia</button><button id="pause">⏸</button><button id="reset">↺</button><button id="record">⏺ Registra</button>
+   <button class="primary" id="play">▶︎ Storia</button><button id="pause">⏸</button><button id="reset">↺</button><button id="record">⏺ Registra</button><button id="share" style="display:none">⬆︎ Salva / Condividi</button>
    <button id="prev">◀︎ Scena</button><button id="next">Scena ▶︎</button>
    <span class="status" id="status"></span>
   </div>
-  <div class="timeline" id="timeline"></div>
+  <div id="exportInfo" style="display:none;margin-top:9px;padding:10px;border:1px solid #3a3a3c;border-radius:10px;color:#ddd;font-size:13px"></div><div class="timeline" id="timeline"></div>
  </div>
 </section>
 <section class="right panel">
@@ -49,61 +49,69 @@ const demo={title:"Una mattina qualunque",scenes:[
 {name:"4 • La sedia",duration:5,background:"office",caption:"...",characters:[{name:"Leo",color:"#111",x0:560,x1:560,y:490,action:"sit",facing:1},{name:"Capo",color:"#8b1e1e",x0:830,x1:830,y:490,action:"idle",facing:-1}]},
 {name:"5 • Finale",duration:6,background:"office",caption:"Domani arrivo prima.",characters:[{name:"Leo",color:"#111",x0:560,x1:560,y:490,action:"wave",facing:1},{name:"Capo",color:"#8b1e1e",x0:830,x1:830,y:490,action:"laugh",facing:-1}]}]};
 let story=structuredClone(demo),si=0,t=0,playing=false,last=performance.now();
-let recorder=null, recordedChunks=[], recording=false, recordingMime="";
+let recorder=null, recordedChunks=[], recording=false, recordingMime="", exportedBlob=null, exportedFile=null;
+const shareBtn=document.getElementById("share"), exportInfo=document.getElementById("exportInfo");
+
 function supportedMime(){
  const candidates=["video/mp4;codecs=h264","video/mp4","video/webm;codecs=vp9","video/webm;codecs=vp8","video/webm"];
  if(!window.MediaRecorder) return "";
  for(const m of candidates){try{if(MediaRecorder.isTypeSupported(m))return m}catch(e){}}
  return "";
 }
-async function finishRecording(){
+function humanSize(n){
+ if(n<1024)return n+" B";
+ if(n<1048576)return (n/1024).toFixed(1)+" KB";
+ return (n/1048576).toFixed(1)+" MB";
+}
+function prepareRecording(){
  if(!recordedChunks.length)return;
  const type=recordingMime||"video/webm";
  const ext=type.includes("mp4")?"mp4":"webm";
- const blob=new Blob(recordedChunks,{type});
- const file=new File([blob],`stickman_story_${Date.now()}.${ext}`,{type});
+ exportedBlob=new Blob(recordedChunks,{type});
+ exportedFile=new File([exportedBlob],`stickman_story_${Date.now()}.${ext}`,{type});
+ exportInfo.style.display="block";
+ exportInfo.innerHTML="<b>✓ Video pronto</b><br>Formato: "+type+"<br>Dimensione: "+humanSize(exportedBlob.size)+"<br>Durata prevista: "+story.scenes.reduce((a,s)=>a+Number(s.duration||0),0)+" s";
+ shareBtn.style.display="";
+ shareBtn.textContent="⬆︎ Salva / Condividi";
+}
+async function shareRecording(){
+ if(!exportedFile)return;
  try{
-   if(navigator.canShare && navigator.canShare({files:[file]})){
-     await navigator.share({files:[file],title:"Stickman Studio",text:"Video esportato da Stickman Studio"});
+   if(navigator.canShare && navigator.canShare({files:[exportedFile]})){
+     await navigator.share({files:[exportedFile],title:"Stickman Studio"});
    } else {
-     const url=URL.createObjectURL(blob);
-     const a=document.createElement("a");a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();
+     const url=URL.createObjectURL(exportedBlob);
+     const a=document.createElement("a");a.href=url;a.download=exportedFile.name;
+     document.body.appendChild(a);a.click();a.remove();
      setTimeout(()=>URL.revokeObjectURL(url),30000);
    }
  }catch(e){
-   if(e.name!=="AbortError") alert("Video creato, ma la condivisione non è riuscita: "+e.message);
+   if(e.name!=="AbortError") alert("Salvataggio/condivisione non riuscito: "+e.message);
  }
 }
 function startRecording(){
  if(recording)return;
  if(!C.captureStream || !window.MediaRecorder){
-   alert("Questo Safari non espone le API necessarie per registrare direttamente il Canvas. Il motore continua a funzionare: useremo un metodo di esportazione alternativo.");
+   alert("Questo Safari non espone le API necessarie per registrare direttamente il Canvas.");
    return;
  }
  recordingMime=supportedMime();
- if(!recordingMime){
-   alert("MediaRecorder è presente, ma non risulta disponibile un formato video compatibile.");
-   return;
- }
+ if(!recordingMime){alert("MediaRecorder è presente, ma non risulta disponibile un formato video compatibile.");return}
  try{
-   const stream=C.captureStream(30);
-   recordedChunks=[];
+   exportedBlob=null;exportedFile=null;shareBtn.style.display="none";exportInfo.style.display="none";
+   const stream=C.captureStream(30);recordedChunks=[];
    recorder=new MediaRecorder(stream,{mimeType:recordingMime,videoBitsPerSecond:6000000});
    recorder.ondataavailable=e=>{if(e.data&&e.data.size)recordedChunks.push(e.data)};
-   recorder.onstop=finishRecording;
-   recorder.start(1000);
-   recording=true;si=0;t=0;playing=true;
+   recorder.onstop=prepareRecording;
+   recorder.start(1000);recording=true;si=0;t=0;playing=true;
    document.getElementById("record").textContent="■ Registrazione…";
  }catch(e){alert("Avvio registrazione non riuscito: "+e.message)}
 }
 function stopRecording(){
  if(!recording)return;
- recording=false;
- document.getElementById("record").textContent="⏺ Registra";
+ recording=false;document.getElementById("record").textContent="⏺ Registra";
  try{recorder.stop()}catch(e){}
 }
-
-
 function bg(k){
  const W=C.width,H=C.height;
  if(k==="blank"){g.fillStyle="#fff";g.fillRect(0,0,W,H);return}
@@ -143,6 +151,7 @@ function draw(){
 function timeline(){TL.innerHTML="";story.scenes.forEach((sc,i)=>{let b=document.createElement("button");b.className="sceneBtn"+(i===si?" active":"");b.textContent=sc.name||`Scena ${i+1}`;b.onclick=()=>{si=i;t=0;playing=false;draw()};TL.appendChild(b)})}
 function tick(now){let dt=(now-last)/1000;last=now;if(playing){t+=dt;let d=story.scenes[si].duration;if(t>=d){if(si<story.scenes.length-1){si++;t=0}else{t=d;playing=false;if(recording)stopRecording()}}}draw();requestAnimationFrame(tick)}
 document.getElementById("record").onclick=()=>{if(recording)stopRecording();else startRecording()};
+shareBtn.onclick=shareRecording;
 document.getElementById("play").onclick=()=>{if(si===story.scenes.length-1&&t>=story.scenes[si].duration){si=0;t=0}playing=true};
 document.getElementById("pause").onclick=()=>playing=false;
 document.getElementById("reset").onclick=()=>{si=0;t=0;playing=false;draw()};
