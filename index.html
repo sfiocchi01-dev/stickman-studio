@@ -5,46 +5,278 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111111">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Stickman Studio</title>
+<title>Stickman Studio v2</title>
 <style>
-body{margin:0;background:#111;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
-main{padding:12px}.wrap{aspect-ratio:16/9;background:#fff;border-radius:14px;overflow:hidden}
+:root{color-scheme:light dark;--bg:#111;--panel:#1c1c1e;--text:#f5f5f7;--muted:#a1a1a6;--accent:#0a84ff;--line:#3a3a3c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:14px 16px 6px}
+h1{font-size:22px;margin:0 0 4px}
+p{margin:0;color:var(--muted);font-size:14px}
+main{padding:10px;display:grid;gap:12px}
+.stage-wrap{aspect-ratio:16/9;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 canvas{width:100%;height:100%;display:block}
-.controls{display:flex;gap:10px;margin-top:12px}
-button{font-size:18px;padding:12px 18px;border:0;border-radius:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+button,select,input,textarea{font:inherit}
+button{border:0;border-radius:10px;padding:11px 14px;font-weight:600;background:#2c2c2e;color:var(--text)}
+button.primary{background:var(--accent);color:white}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.field{min-width:0}
+select,input,textarea{width:100%;background:#111;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px}
+textarea{min-height:190px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.status{color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto;align-self:center}
+.small{font-size:12px;color:var(--muted);margin-top:8px}
+@media(min-width:900px){
+ main{grid-template-columns:1.4fr .8fr;align-items:start}
+ .left{display:grid;gap:12px}
+ .right{position:sticky;top:10px}
+}
+@media(max-width:700px){
+ .grid{grid-template-columns:1fr}
+ button{flex:1}
+ .status{width:100%;margin-left:0}
+}
 </style>
 </head>
 <body>
+<header>
+  <h1>Stickman Studio v2</h1>
+  <p>Prototipo iPad-first: scene, personaggi e azioni modificabili senza toccare il codice.</p>
+</header>
+
 <main>
-<h2>Stickman Studio — Prototype 01</h2>
-<div class="wrap"><canvas id="c" width="1280" height="720"></canvas></div>
-<div class="controls"><button id="play">▶︎ Play</button><button id="reset">↺ Reset</button></div>
+  <section class="left">
+    <div class="stage-wrap"><canvas id="stage" width="1280" height="720"></canvas></div>
+
+    <div class="panel">
+      <div class="controls">
+        <button class="primary" id="play">▶︎ Play</button>
+        <button id="reset">↺ Reset</button>
+        <button id="apply">Applica scena</button>
+        <button id="demo">Carica demo</button>
+        <div class="status" id="status">0.0 s / 10.0 s</div>
+      </div>
+      <div class="small">Suggerimento: modifica i parametri a destra, premi “Applica scena” e poi Play.</div>
+    </div>
+  </section>
+
+  <section class="right panel">
+    <div class="grid">
+      <div class="field">
+        <label for="bg">Sfondo</label>
+        <select id="bg">
+          <option value="office">Ufficio</option>
+          <option value="park">Parco</option>
+          <option value="street">Strada</option>
+          <option value="blank">Bianco</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="duration">Durata scena (s)</label>
+        <input id="duration" type="number" min="2" max="30" step="1" value="10">
+      </div>
+      <div class="field">
+        <label for="actionA">Azione personaggio A</label>
+        <select id="actionA">
+          <option value="walk_wave">Cammina e saluta</option>
+          <option value="walk">Cammina</option>
+          <option value="run">Corre</option>
+          <option value="idle">Fermo</option>
+          <option value="wave">Saluta</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="actionB">Azione personaggio B</label>
+        <select id="actionB">
+          <option value="idle">Fermo</option>
+          <option value="wave">Saluta</option>
+          <option value="walk">Cammina</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <label for="sceneJson">Scene JSON</label>
+      <textarea id="sceneJson"></textarea>
+      <div class="small">Questo formato è il ponte tra ChatGPT e il motore: io potrò generarti direttamente questi blocchi scena.</div>
+    </div>
+  </section>
 </main>
+
 <script>
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
-const c=document.getElementById('c'),x=c.getContext('2d'),play=document.getElementById('play'),reset=document.getElementById('reset');
-let t=0,run=false,last=performance.now();
-function man(px,py,wave=false,face=false){
- x.save();x.translate(px,py);x.strokeStyle='#111';x.lineWidth=10;x.lineCap='round';
- x.beginPath();x.arc(0,-150,34,0,Math.PI*2);x.stroke();
- x.beginPath();x.moveTo(0,-115);x.lineTo(0,-20);x.stroke();
- x.beginPath();x.moveTo(0,-90);x.lineTo(-48,-60);x.stroke();
- x.beginPath();x.moveTo(0,-90);x.lineTo(48,wave?-145:-60);x.stroke();
- x.beginPath();x.moveTo(0,-20);x.lineTo(-32,70);x.stroke();
- x.beginPath();x.moveTo(0,-20);x.lineTo(32,70);x.stroke();
- if(face){x.lineWidth=4;x.beginPath();x.arc(0,-145,14,.15*Math.PI,.85*Math.PI);x.stroke()}
- x.restore();
+
+const canvas=document.getElementById('stage');
+const ctx=canvas.getContext('2d');
+const playBtn=document.getElementById('play');
+const resetBtn=document.getElementById('reset');
+const applyBtn=document.getElementById('apply');
+const demoBtn=document.getElementById('demo');
+const status=document.getElementById('status');
+const bgSel=document.getElementById('bg');
+const durationInput=document.getElementById('duration');
+const actionASel=document.getElementById('actionA');
+const actionBSel=document.getElementById('actionB');
+const sceneJson=document.getElementById('sceneJson');
+
+let t=0, playing=false, last=performance.now();
+
+const defaultScene={
+  duration:10,
+  background:"office",
+  caption:"Ciao!",
+  characters:[
+    {name:"A",x0:-80,x1:610,y:490,action:"walk_wave",facing:1},
+    {name:"B",x0:820,x1:820,y:490,action:"idle",facing:-1}
+  ]
+};
+let scene=structuredClone(defaultScene);
+
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,u)=>a+(b-a)*u;
+const ease=u=>{u=clamp(u,0,1);return u*u*(3-2*u)};
+
+function syncFormFromScene(){
+  bgSel.value=scene.background||"office";
+  durationInput.value=scene.duration||10;
+  actionASel.value=scene.characters?.[0]?.action||"walk_wave";
+  actionBSel.value=scene.characters?.[1]?.action||"idle";
+  sceneJson.value=JSON.stringify(scene,null,2);
 }
+function sceneFromForm(){
+  scene.background=bgSel.value;
+  scene.duration=Number(durationInput.value)||10;
+  if(scene.characters?.[0]) scene.characters[0].action=actionASel.value;
+  if(scene.characters?.[1]) scene.characters[1].action=actionBSel.value;
+  sceneJson.value=JSON.stringify(scene,null,2);
+}
+function applyScene(){
+  try{
+    scene=JSON.parse(sceneJson.value);
+    syncFormFromScene();
+    t=0; playing=false; playBtn.textContent='▶︎ Play'; draw();
+  }catch(e){
+    alert('JSON non valido: '+e.message);
+  }
+}
+
+function background(kind){
+  const W=canvas.width,H=canvas.height;
+  if(kind==="blank"){
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);return;
+  }
+  if(kind==="park"){
+    ctx.fillStyle='#dfefff';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#dfe8cf';ctx.fillRect(0,470,W,250);
+    ctx.fillStyle='#8d6e63';ctx.fillRect(960,270,28,250);
+    ctx.fillStyle='#9fc58a';ctx.beginPath();ctx.arc(975,250,95,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#a3a3a3';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,560);ctx.lineTo(W,560);ctx.stroke();
+    return;
+  }
+  if(kind==="street"){
+    ctx.fillStyle='#dfefff';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#d8d8d8';ctx.fillRect(0,430,W,290);
+    ctx.fillStyle='#555';ctx.fillRect(0,560,W,160);
+    ctx.strokeStyle='#f1f1f1';ctx.lineWidth=8;
+    for(let x=40;x<W;x+=140){ctx.beginPath();ctx.moveTo(x,640);ctx.lineTo(x+70,640);ctx.stroke();}
+    return;
+  }
+  // office
+  ctx.fillStyle='#f7f7f5';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#c9c9c4';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,560);ctx.lineTo(W,560);ctx.stroke();
+  ctx.fillStyle='#deded8';ctx.fillRect(860,390,220,18);ctx.fillRect(890,408,18,150);ctx.fillRect(1030,408,18,150);
+  ctx.fillStyle='#c9d6e8';ctx.fillRect(930,315,90,70);ctx.strokeStyle='#8aa1bd';ctx.lineWidth=4;ctx.strokeRect(930,315,90,70);
+  ctx.fillStyle='#ecece8';ctx.fillRect(80,90,270,140);ctx.strokeStyle='#d2d2cc';ctx.strokeRect(80,90,270,140);
+  ctx.fillStyle='#6f6f6f';ctx.font='28px -apple-system,sans-serif';ctx.fillText('UFFICIO',150,165);
+}
+
+function stickman(px,py,scale,opts={}){
+  const {phase=0,armWave=0,face='neutral',facing=1,accent='#111'}=opts;
+  ctx.save();ctx.translate(px,py);ctx.scale(facing*scale,scale);
+  ctx.strokeStyle=accent;ctx.fillStyle='#fff';ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=10;
+  const legSwing=Math.sin(phase)*24, armSwing=-Math.sin(phase)*22;
+
+  ctx.beginPath();ctx.arc(0,-155,34,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle=accent;ctx.beginPath();ctx.arc(-10,-160,3.5,0,Math.PI*2);ctx.arc(10,-160,3.5,0,Math.PI*2);ctx.fill();
+  ctx.lineWidth=4;ctx.beginPath();
+  if(face==='smile')ctx.arc(0,-150,14,.15*Math.PI,.85*Math.PI);else{ctx.moveTo(-9,-145);ctx.lineTo(9,-145)}
+  ctx.stroke();ctx.lineWidth=10;
+
+  ctx.beginPath();ctx.moveTo(0,-120);ctx.lineTo(0,-15);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-95);ctx.lineTo(-48,-65+armSwing*.35);ctx.stroke();
+
+  if(armWave>0){
+    const w=Math.sin(t*8)*10*armWave;
+    ctx.beginPath();ctx.moveTo(0,-95);ctx.lineTo(38,-112);ctx.lineTo(54,-155+w);ctx.stroke();
+  }else{
+    ctx.beginPath();ctx.moveTo(0,-95);ctx.lineTo(48,-65-armSwing*.35);ctx.stroke();
+  }
+
+  ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(-30+legSwing,70);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(30-legSwing,70);ctx.stroke();
+  ctx.restore();
+}
+
+function characterState(ch){
+  const dur=scene.duration||10;
+  const action=ch.action||"idle";
+  let x=ch.x0??200, phase=0, wave=0, face='neutral';
+
+  if(action==="walk" || action==="walk_wave"){
+    const moveEnd=dur*.6;
+    if(t<=moveEnd){
+      const u=ease(t/moveEnd);
+      x=lerp(ch.x0??-80,ch.x1??610,u);
+      phase=t*8;
+    }else x=ch.x1??610;
+    if(action==="walk_wave" && t>dur*.68){wave=clamp((t-dur*.68)/.5,0,1);face='smile';}
+  }else if(action==="run"){
+    const moveEnd=dur*.45;
+    if(t<=moveEnd){x=lerp(ch.x0??-80,ch.x1??610,ease(t/moveEnd));phase=t*13;}
+    else x=ch.x1??610;
+  }else if(action==="wave"){
+    x=ch.x1??ch.x0??600;
+    wave=1;face='smile';
+  }else{
+    x=ch.x1??ch.x0??600;
+  }
+  return {x,phase,wave,face};
+}
+
 function draw(){
- x.fillStyle='#f7f7f5';x.fillRect(0,0,c.width,c.height);
- x.strokeStyle='#ccc';x.lineWidth=3;x.beginPath();x.moveTo(0,560);x.lineTo(1280,560);x.stroke();
- let ax=-100;if(t>=1&&t<6)ax=-70+(680*((t-1)/5));else if(t>=6)ax=610;
- man(ax,490,t>=7,t>=7);man(820,490,t>=7.7,t>=7.7);
- if(t>=7.2&&t<9.5){x.fillStyle='#111';x.font='bold 30px sans-serif';x.fillText('Ciao!',640,260)}
+  background(scene.background||"office");
+  const chars=scene.characters||[];
+  chars.forEach(ch=>{
+    const s=characterState(ch);
+    stickman(s.x,ch.y??490,1,{phase:s.phase,armWave:s.wave,face:s.face,facing:ch.facing??1,accent:'#111'});
+  });
+
+  if(scene.caption && t>(scene.duration||10)*.7){
+    ctx.fillStyle='#111';ctx.font='bold 30px -apple-system,sans-serif';
+    ctx.fillText(scene.caption,640,260);
+  }
+  status.textContent=`${t.toFixed(1)} s / ${(scene.duration||10).toFixed(1)} s`;
 }
-function loop(now){let dt=(now-last)/1000;last=now;if(run){t+=dt;if(t>=10){t=10;run=false;play.textContent='▶︎ Replay'}}draw();requestAnimationFrame(loop)}
-play.onclick=()=>{if(t>=10)t=0;run=!run;play.textContent=run?'⏸ Pausa':'▶︎ Play'};
-reset.onclick=()=>{t=0;run=false;play.textContent='▶︎ Play';draw()};
-draw();requestAnimationFrame(loop);
+
+function tick(now){
+  const dt=(now-last)/1000;last=now;
+  if(playing){
+    t+=dt;
+    if(t>=scene.duration){t=scene.duration;playing=false;playBtn.textContent='▶︎ Replay';}
+  }
+  draw();requestAnimationFrame(tick);
+}
+playBtn.onclick=()=>{if(t>=scene.duration)t=0;playing=!playing;playBtn.textContent=playing?'⏸ Pausa':'▶︎ Play';};
+resetBtn.onclick=()=>{t=0;playing=false;playBtn.textContent='▶︎ Play';draw();};
+applyBtn.onclick=applyScene;
+demoBtn.onclick=()=>{scene=structuredClone(defaultScene);syncFormFromScene();t=0;playing=false;playBtn.textContent='▶︎ Play';draw();};
+[bgSel,durationInput,actionASel,actionBSel].forEach(el=>el.addEventListener('change',()=>{sceneFromForm();applyScene();}));
+
+syncFormFromScene();
+draw();
+requestAnimationFrame(tick);
 </script>
-</body></html>
+</body>
+</html>
